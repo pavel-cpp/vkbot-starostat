@@ -1,5 +1,4 @@
 /venv/
 /database.db
 /.idea/
-/.gitignore
 /__pycache__/
