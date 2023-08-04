@@ -2,6 +2,7 @@ from pprint import pprint
 import os
 
 from vkbottle.bot import Bot, Message
+from vkbottle import VKAPIError, GroupEventType
 import sqlite3
 
 from consts import admins
@@ -12,23 +13,28 @@ database = sqlite3.connect("database.db")
 
 db_cursor = database.cursor()
 
-db_cursor.execute('CREATE TABLE IF NOT EXISTS student_groups (id INT, course INT, members_count INT)')
+db_cursor.execute('CREATE TABLE IF NOT EXISTS student_groups (id INT PRIMARY KEY, course INT, members_count INT)')
 
 database.commit()
 
-
 async def share_messages(courses: list, text=None, attachment=None):
     for course in courses:
-        groups = list(db_cursor.execute(f"SELECT id FROM student_groups WHERE course == {course}"))
+        groups = list(db_cursor.execute(f"SELECT id FROM student_groups WHERE course={course}"))
         for group in groups:
-            await bot.api.messages.send(
-                peer_id=(int(2e9) + group[0]),
-                message=text,
-                attachment=attachment,
-                random_id=0
-            )
+            try:
+                await bot.api.messages.send(
+                    peer_id=(int(2e9) + group[0]),
+                    message=(text + str(group[0])),
+                    attachment=attachment,
+                    random_id=0
+                )
+            except:
+                db_cursor.execute(f"DELETE FROM student_groups WHERE id={group[0]}")
+                database.commit()
 
-
+@bot.on.chat_message(text='Рассылка: <courses>, Текст <text>')
+async def sharing_text(message: Message, courses: str, text: str):
+    await share_messages(courses.split(), text=text)
 @bot.on.chat_message(text='Рассылка: <courses>, <share_type>')
 async def sharing(message: Message, courses: str, share_type: str):
     if message.from_id not in admins:
@@ -49,10 +55,6 @@ async def sharing(message: Message, courses: str, share_type: str):
     else:
         await message.answer('Ошибка: Не верно указан тип')
 
-
-@bot.on.chat_message(text='Рассылка: <courses>, Текст <text>')
-async def sharing_text(message: Message, text: str):
-    return
 @bot.on.chat_message(text='Добавить <course>')
 async def test(message: Message, course):
     group_id = message.peer_id - int(2e9)
@@ -79,11 +81,9 @@ async def test(message: Message, course):
     database.commit()
     await message.answer('Ваша беседа успешно добавлена')
 
-    # db_cursor.execute('INSERT INTO first_course (id, peoples, name, status) VALUES (0, 2, "name", "ok")')
-    # database.commit()
-
 @bot.on.chat_message()
 async def sharing_text(message: Message):
-    await message.answer('Неизвестная команда')
+        await bot.api.messages.send(peer_id=message.peer_id, message='Неизвестная команда', random_id=0)
+
 
 bot.run_forever()
