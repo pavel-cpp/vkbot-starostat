@@ -29,8 +29,6 @@ student_groups = Table(
 if not inspect(engine).has_table('student_groups'):
     student_groups.create(engine)
 
-# SQL Alchemy end init
-
 async def share_messages(courses: list, text=None, attachment=None):
     for course in courses:
         groups = list(conn.execute(select(student_groups.c.id).where(student_groups.c.course == course)))
