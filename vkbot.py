@@ -1,25 +1,39 @@
-from pprint import pprint
 import os
 
+from loguru import logger
+from sqlalchemy import create_engine, Table, Integer, Column, MetaData, inspect, select, delete, insert
 from vkbottle.bot import Bot, Message
-from vkbottle import VKAPIError, GroupEventType
-import sqlite3
 
 from consts import admins
 
-bot = Bot(os.getenv('VKTOKEN'))
+# logger.disable('vkbottle') # Logger disable
 
-database = sqlite3.connect("database.db")
+bot = Bot(os.getenv('VKTOKEN')) # VKBOT init
 
-db_cursor = database.cursor()
+# SQL Alchemy init
 
-db_cursor.execute('CREATE TABLE IF NOT EXISTS student_groups (id INT PRIMARY KEY, course INT, members_count INT)')
+engine = create_engine('sqlite:///database.db', echo=True)
 
-database.commit()
+conn = engine.connect()
+
+metadata = MetaData()
+
+student_groups = Table(
+    'student_groups',
+    metadata,
+    Column('id', Integer, primary_key=True),
+    Column('course', Integer, nullable=False),
+    Column('members_count', Integer, nullable=False)
+)
+
+if not inspect(engine).has_table('student_groups'):
+    student_groups.create(engine)
+
+# SQL Alchemy end init
 
 async def share_messages(courses: list, text=None, attachment=None):
     for course in courses:
-        groups = list(db_cursor.execute(f"SELECT id FROM student_groups WHERE course={course}"))
+        groups = list(conn.execute(select(student_groups.c.id).where(student_groups.c.course == course)))
         for group in groups:
             try:
                 await bot.api.messages.send(
@@ -29,12 +43,15 @@ async def share_messages(courses: list, text=None, attachment=None):
                     random_id=0
                 )
             except:
-                db_cursor.execute(f"DELETE FROM student_groups WHERE id={group[0]}")
-                database.commit()
+                conn.execute(delete(student_groups).where(student_groups.c.id == group[0]))
+                conn.commit()
+
 
 @bot.on.chat_message(text='Рассылка: <courses>, Текст <text>')
 async def sharing_text(message: Message, courses: str, text: str):
     await share_messages(courses.split(), text=text)
+
+
 @bot.on.chat_message(text='Рассылка: <courses>, <share_type>')
 async def sharing(message: Message, courses: str, share_type: str):
     if message.from_id not in admins:
@@ -55,35 +72,38 @@ async def sharing(message: Message, courses: str, share_type: str):
     else:
         await message.answer('Ошибка: Не верно указан тип')
 
+
 @bot.on.chat_message(text='Добавить <course>')
 async def test(message: Message, course):
     group_id = message.peer_id - int(2e9)
     members_cnt = (await bot.api.messages.get_conversation_members(peer_id=(message.peer_id - int(2e9)))).count
 
-    course_ids = list(db_cursor.execute(f"SELECT id FROM student_groups"))
-
-    pprint(course_ids)
-
     if course != 'admin':
         if int(course) < 0 or int(course) > 5:
             await message.answer("Такого курса не существует!")
+            return
     else:
         course = '-1'
 
-    pprint(f"INSERT INTO student_groups VALUES ({group_id}, {course}, {members_cnt})")
+    groups_ids = list(conn.execute(select(student_groups.c.id)))
 
-    for i in course_ids:
+    for i in groups_ids:
         if i[0] == group_id:
             await message.answer('Ваша беседа уже есть в списке')
             return
 
-    db_cursor.execute(f"INSERT INTO student_groups VALUES ({group_id}, {course}, {members_cnt})")
-    database.commit()
+    conn.execute(insert(student_groups), [{
+        'id': group_id,
+        'course': course,
+        'members_count': members_cnt
+    }])
+    conn.commit()
     await message.answer('Ваша беседа успешно добавлена')
+
 
 @bot.on.chat_message()
 async def sharing_text(message: Message):
-        await bot.api.messages.send(peer_id=message.peer_id, message='Неизвестная команда', random_id=0)
+    await bot.api.messages.send(peer_id=message.peer_id, message='Неизвестная команда', random_id=0)
 
 
 bot.run_forever()
