@@ -12,8 +12,10 @@ student_groups = Table(
     Column('course', Integer, nullable=False),
 )
 
-if not inspect(engine).has_table('student_groups'):
-    student_groups.create(engine)
+
+def init_database():
+    if not inspect(engine).has_table('student_groups'):
+        student_groups.create(engine)
 
 
 def id_by_course(course: int):

@@ -3,12 +3,14 @@ import os
 from loguru import logger
 from vkbottle.bot import Bot, Message
 
-from consts import ADMINS, MAGIC_NUMBER
-from db_interface import add_new_group, get_all_ids, delete_group, id_by_course
+from consts import ADMINS, ID_COEFFICIENT
+from db_interface import add_new_group, get_all_ids, delete_group, id_by_course, init_database
 
-# logger.disable('vkbottle') # Logger disable
+logger.disable('vkbottle')
 
 bot = Bot(os.getenv('VKTOKEN'))
+
+init_database()
 
 
 def is_admin(user_id: int):
@@ -21,12 +23,12 @@ async def broadcast(courses: list, text=None, attachment=None):
         for group in groups:
             try:
                 await bot.api.messages.send(
-                    peer_id=(MAGIC_NUMBER + group[0]),
+                    peer_id=(ID_COEFFICIENT + group[0]),
                     message=text,
                     attachment=attachment,
                     random_id=0
                 )
-            except Exception as exception:
+            except Exception:
                 delete_group(group[0])
 
 
@@ -38,62 +40,64 @@ async def sharing_text(message: Message, courses: str, text: str):
     await broadcast(courses.split(), text=text)
 
 
-@bot.on.chat_message(text='Рассылка: <courses>, <share_type>')
-async def sharing(message: Message, courses: str, share_type: str):
+@bot.on.chat_message(text='Рассылка: <courses>, Пост')
+async def share_publication(message: Message, courses: str):
     if not is_admin(message.from_id):
         await message.answer('Вы не можете проводить рассылки!')
         return
 
-    if share_type == 'Пост':
-        attachment = message.get_wall_attachment()[0]
-        publication = f"wall{attachment.owner_id}_{attachment.id}"
-        await broadcast(courses.split(), attachment=[publication])
-    elif share_type == 'Сообщение':
-        if message.fwd_messages:
-            await broadcast(courses.split(), text=message.fwd_messages[0].text)
-        else:
-            await message.answer('Ошибка: нет пересланного сообщения')
-    else:
-        await message.answer('Ошибка: Не верно указан тип')
+    publication = f"wall{message.get_wall_attachment()[0].owner_id}_{message.get_wall_attachment()[0].id}"
+    await broadcast(courses.split(), attachment=[publication])
 
+
+@bot.on.chat_message(text='Рассылка: <courses>, Сообщение')
+async def share_message(message: Message, courses: str):
+    if not is_admin(message.from_id):
+        await message.answer('Вы не можете проводить рассылки!')
+        return
+
+    if message.fwd_messages:
+        await broadcast(courses.split(), text=message.fwd_messages[0].text)
+    else:
+        await message.answer('Ошибка: нет пересланного сообщения')
+
+@bot.on.chat_message(text='Рассылка: <courses>, ')
+async def incorrect_message(message: Message, courses: str):
+    if is_admin(message.from_id):
+        await message.answer('Не верно введена команда')
+        return
+    await message.answer('Вы не можете проводить рассылки!')
 
 @bot.on.chat_message(text='Добавить <course>')
 async def test(message: Message, course: str):
-    group_id = message.peer_id - MAGIC_NUMBER
 
     if course != 'admin':
-        if course.isnumeric():
+        if course.isnumeric() and (1 <= int(course) <= 5):
             course = int(course)
         else:
             await message.answer("Не верно введен курс!")
             return
-        if course < 0 or course > 5:
-            await message.answer("Такого курса не существует!")
-            return
-
     else:
         course = -1
 
     groups_ids = get_all_ids()
+    group_id = message.peer_id - ID_COEFFICIENT
 
-    print(groups_ids)
-
-    for i in groups_ids:
-        if i[0] == group_id:
+    for id in groups_ids:
+        if id[0] == group_id:
             await message.answer('Ваша беседа уже есть в списке')
             return
 
     add_new_group(group_id, course)
 
     await message.answer('Ваша беседа успешно добавлена')
+    await message.answer('Сообщение для закрепа (Ждем от СММ)')
 
 
 @bot.on.chat_message(text='Помощь')
 async def user_help(message: Message):
-    if not is_admin(message.from_id):
-        await message.answer('Никакой тебе помощи мудень')
-        return
-    await message.answer('Красавчик, тебе отсосать?')
+    if is_admin(message.from_id):
+        await message.answer('Помощь для админов')
 
 
 bot.run_forever()
