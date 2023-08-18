@@ -3,100 +3,80 @@ import os
 from loguru import logger
 from vkbottle.bot import Bot, Message
 
-from consts import ADMINS, ID_COEFFICIENT
-from db_interface import add_new_group, get_all_ids, delete_group, id_by_course, init_database
-
-logger.disable('vkbottle')
+from consts import ADMINS, GROUP_ID_COEFFICIENT
+from db_interface import add_group, groups_ids, delete_group, ids_by_course, init_database
 
 bot = Bot(os.getenv('VKTOKEN'))
 
 init_database()
 
 
-def is_admin(user_id: int):
-    return user_id in ADMINS
-
-
-async def broadcast(courses: list, text=None, attachment=None):
+async def broadcast(courses: str, text=None, attachment=None):
     for course in courses:
-        groups = id_by_course(course)
-        for group in groups:
+        for group in ids_by_course(int(course)):
             try:
                 await bot.api.messages.send(
-                    peer_id=(ID_COEFFICIENT + group[0]),
+                    peer_id=(GROUP_ID_COEFFICIENT + group),
                     message=text,
                     attachment=attachment,
                     random_id=0
                 )
-            except Exception:
-                delete_group(group[0])
+            except Exception as exception:
+                logger.warning(exception)
+                delete_group(group)
 
 
 @bot.on.chat_message(text='Рассылка: <courses>, Текст <text>')
 async def sharing_text(message: Message, courses: str, text: str):
-    if not is_admin(message.from_id):
-        await message.answer('Вы не можете проводить рассылки!')
+    if message.from_id not in ADMINS:
         return
-    await broadcast(courses.split(), text=text)
+    await broadcast(courses, text=text)
 
 
 @bot.on.chat_message(text='Рассылка: <courses>, Пост')
 async def share_publication(message: Message, courses: str):
-    if not is_admin(message.from_id):
-        await message.answer('Вы не можете проводить рассылки!')
+    if message.from_id not in ADMINS:
         return
-
-    publication = f"wall{message.get_wall_attachment()[0].owner_id}_{message.get_wall_attachment()[0].id}"
-    await broadcast(courses.split(), attachment=[publication])
+    attachment = message.get_wall_attachment()[0]
+    await broadcast(courses, attachment=[f"wall{attachment.owner_id}_{attachment.id}"])
 
 
 @bot.on.chat_message(text='Рассылка: <courses>, Сообщение')
 async def share_message(message: Message, courses: str):
-    if not is_admin(message.from_id):
-        await message.answer('Вы не можете проводить рассылки!')
+    if message.from_id not in ADMINS:
         return
 
     if message.fwd_messages:
-        await broadcast(courses.split(), text=message.fwd_messages[0].text)
+        await broadcast(courses, text=message.fwd_messages[0].text)
     else:
         await message.answer('Ошибка: нет пересланного сообщения')
 
-@bot.on.chat_message(text='Рассылка: <courses>, ')
-async def incorrect_message(message: Message, courses: str):
-    if is_admin(message.from_id):
-        await message.answer('Не верно введена команда')
-        return
-    await message.answer('Вы не можете проводить рассылки!')
 
 @bot.on.chat_message(text='Добавить <course>')
 async def test(message: Message, course: str):
-
-    if course != 'admin':
-        if course.isnumeric() and (1 <= int(course) <= 5):
-            course = int(course)
-        else:
-            await message.answer("Не верно введен курс!")
-            return
-    else:
+    if course == 'admin':
         course = -1
+    elif course.isnumeric() and 1 <= int(course) <= 5:
+        course = int(course)
+    else:
+        await message.answer("Не верно введен курс!")
+        return
 
-    groups_ids = get_all_ids()
-    group_id = message.peer_id - ID_COEFFICIENT
+    group_id = message.peer_id - GROUP_ID_COEFFICIENT
 
-    for id in groups_ids:
-        if id[0] == group_id:
-            await message.answer('Ваша беседа уже есть в списке')
-            return
+    if group_id in groups_ids():
+        await message.answer('Ваша беседа уже есть в списке')
+        return
 
-    add_new_group(group_id, course)
+    add_group(group_id, course)
 
-    await message.answer('Ваша беседа успешно добавлена')
+    await message.answer('Ваша беседа успешно добавлена!')
     await message.answer('Сообщение для закрепа (Ждем от СММ)')
 
 
 @bot.on.chat_message(text='Помощь')
 async def user_help(message: Message):
-    if is_admin(message.from_id):
+    if message.from_id in ADMINS:
         await message.answer('Помощь для админов')
 
 

@@ -18,8 +18,8 @@ def init_database():
         student_groups.create(engine)
 
 
-def id_by_course(course: int):
-    return conn.execute(select(student_groups.c.id).where(student_groups.c.course == course)).all()
+def ids_by_course(course: int):
+    return zip(*conn.execute(select(student_groups.c.id).where(student_groups.c.course == course)).all())[0]
 
 
 def delete_group(group_id: int):
@@ -27,11 +27,11 @@ def delete_group(group_id: int):
     conn.commit()
 
 
-def get_all_ids():
-    return conn.execute(select(student_groups.c.id)).all()
+def groups_ids():
+    return zip(*conn.execute(select(student_groups.c.id)).all())[0]
 
 
-def add_new_group(group_id: int, course: int):
+def add_group(group_id: int, course: int):
     conn.execute(insert(student_groups), [{
         'id': group_id,
         'course': course,
