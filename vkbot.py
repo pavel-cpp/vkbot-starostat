@@ -1,5 +1,6 @@
 import os
 
+from dotenv import load_dotenv
 from fastapi import FastAPI, Request
 
 from loguru import logger
@@ -10,7 +11,9 @@ from db_interface import add_group, groups_ids, delete_group, ids_by_course, ini
 
 app = FastAPI()
 
-bot = Bot(os.getenv('VKTOKEN'))
+load_dotenv()
+
+bot = Bot(os.getenv('VKTOKEN', 'NoToken'))
 
 init_database()
 
