@@ -1,15 +1,18 @@
 import os
 
+from fastapi import FastAPI, Request
+
 from loguru import logger
 from vkbottle.bot import Bot, Message
 
 from consts import ADMINS, GROUP_ID_COEFFICIENT
 from db_interface import add_group, groups_ids, delete_group, ids_by_course, init_database
 
+app = FastAPI()
+
 bot = Bot(os.getenv('VKTOKEN'))
 
 init_database()
-
 
 async def broadcast(courses: str, text=None, attachment=None):
     for course in courses:
@@ -80,4 +83,13 @@ async def user_help(message: Message):
         await message.answer('Помощь для админов')
 
 
-bot.run_forever()
+@app.post("/callback")
+async def callback(request: Request):
+    data = await request.json()
+    print(data)
+    answer = await bot.process_event([data])
+    return answer
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=80)
