@@ -2,6 +2,7 @@ import os
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request
+import uvicorn
 
 from loguru import logger
 from vkbottle.bot import Bot, Message
@@ -116,11 +117,8 @@ async def user_help(message: Message):
 async def callback(request: Request):
     data = await request.json()
     print(data)
-    answer = await bot.process_event([data])
-    return answer
+    await bot.process_event([data])
 
 
 if __name__ == "__main__":
-    import uvicorn
-
     uvicorn.run(app, host="0.0.0.0", port=80)
