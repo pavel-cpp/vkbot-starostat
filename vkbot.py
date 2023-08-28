@@ -1,12 +1,21 @@
 import os
 
+from dotenv import load_dotenv
+from fastapi import FastAPI, Request
+import uvicorn
+
 from loguru import logger
 from vkbottle.bot import Bot, Message
 
 from consts import ADMINS, GROUP_ID_COEFFICIENT
-from db_interface import add_group, groups_ids, delete_group, ids_by_course, init_database
+from db_interface import (add_group, groups_ids,
+                          delete_group, ids_by_course, init_database)
 
-bot = Bot(os.getenv('VKTOKEN'))
+app = FastAPI()
+
+load_dotenv()
+
+bot = Bot(os.getenv('VKTOKEN', 'NoToken'))
 
 init_database()
 
@@ -38,7 +47,10 @@ async def share_publication(message: Message, courses: str):
     if message.from_id not in ADMINS:
         return
     attachment = message.get_wall_attachment()[0]
-    await broadcast(courses, attachment=[f"wall{attachment.owner_id}_{attachment.id}"])
+    await broadcast(
+        courses,
+        attachment=[f"wall{attachment.owner_id}_{attachment.id}"]
+    )
 
 
 @bot.on.chat_message(text='Рассылка: <courses>, Сообщение')
@@ -71,13 +83,57 @@ async def test(message: Message, course: str):
     add_group(group_id, course)
 
     await message.answer('Ваша беседа успешно добавлена!')
-    await message.answer('Сообщение для закрепа (Ждем от СММ)')
+    await message.answer(
+        'Добро пожаловать в беседу!\n\n'
+        'Этот чат создан специально для '
+        f'старост {course} курса факультета ИКСС. '
+        'Здесь будет собрана только важная информация, '
+        'которую вы обязаны знать и/или распространить!\n\n'
+        'Сейчас вам необходимо ознакомиться с правилами чата.\n'
+        '🟧Писать здесь могут только:\n'
+        '👉🏼 Староста\n'
+        '👉🏼 Зам. старосты\n'
+        '👉🏼 Бот\n'
+        'Для остальных участников данный чат доступен '
+        'только для просмотра информации.\n'
+        '🟧Запрещено писать сообщения без предварительного '
+        'согласования их со старостой курса, указанным в пункте выше.\n\n'
+        '🟧 Полезные ресурсы:\n'
+        '✅Бот в Телеграм: https://t.me/BonchGUTBot\n'
+        '✅Сайт Бонча: https://www.sut.ru\n'
+        '✅ГУТ.Навигатор: https://nav.sut.ru/?cab=k2-117\n'
+        '✅Студгородок: https://vk.com/campusut\n'
+        '✅Факультет ИКСС: https://vk.com/iksssut\n'
+        '✅Группа СПбГУТ: https://vk.com/sutru\n'
+        '✅Студсовет: https://vk.com/studsovet.bonch\n'
+        '✅InGUT: https://vk.com/ingut\n'
+        '✅Подслушано Бонч: https://vk.com/overhear_bonch\n'
+        '✅Bonch Media: https://vk.com/bonch.media\n'
+        '✅Первокурсники СПбГУТ: https://vk.com/onegut\n\n'
+        'По вопросам и предложениям писать @pavel.cmake(разработчику)'
+    )
 
 
 @bot.on.chat_message(text='Помощь')
 async def user_help(message: Message):
     if message.from_id in ADMINS:
-        await message.answer('Помощь для админов')
+        await message.answer(
+            'Команды:\n\n'
+            'Добавить <course> - Добавляет беседу в БД, '
+            'флаг admin значит что в беседу не будут приходить новости\n\n'
+            'Рассылка: <courses>, Сообщение - '
+            'Рассылает пересланное сообщение\n\n'
+            'Рассылка: <courses>, Пост - Рассылает пересланный пост\n\n'
+            'Рассылка: <courses>, Текст <text> - Рассылает набранный текст'
+        )
 
 
-bot.run_forever()
+@app.post("/callback")
+async def callback(request: Request):
+    data = await request.json()
+    print(data)
+    await bot.process_event([data])
+
+
+if __name__ == "__main__":
+    uvicorn.run(app, host="0.0.0.0", port=80)
