@@ -1,4 +1,7 @@
-from sqlalchemy import create_engine, Table, Integer, Column, MetaData, inspect, select, delete, insert
+from sqlalchemy import (create_engine, Table,
+                        Integer, Column,
+                        MetaData, inspect,
+                        select, delete, insert)
 from consts import DB_PATH
 
 engine = create_engine(f'sqlite:///{DB_PATH}', echo=True)
@@ -19,7 +22,13 @@ def init_database():
 
 
 def ids_by_course(course: int):
-    return zip(*conn.execute(select(student_groups.c.id).where(student_groups.c.course == course)).all())[0]
+    return zip(
+        *conn.execute(
+            select(student_groups.c.id).where(
+                student_groups.c.course == course
+            )
+        ).all()
+    )[0]
 
 
 def delete_group(group_id: int):
