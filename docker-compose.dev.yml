@@ -1,0 +1,10 @@
+version: '3.8'
+
+services:
+  backend:
+    image: ${CI_REGISTRY_IMAGE}/fastapi:${CI_COMMIT_REF_SLUG}-dev
+    volumes:
+      - ./src:/app
+    command: ["make", "run_dev"]
+    environment:
+      FLASK_ENV: development

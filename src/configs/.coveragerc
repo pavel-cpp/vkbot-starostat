@@ -1,0 +1,20 @@
+[report]
+exclude_lines = raise NotImplementedError
+fail_under=90
+skip_empty=True
+sort=Cover
+
+[html]
+directory=artifacts/cov_report/
+show_contexts=True
+
+[run]
+branch=True
+data_file=artifacts/.cov_db
+dynamic_context=test_function
+
+omit = */tests/*
+       */migrations/*
+       manage.py
+       settings/*
+       conftest.py

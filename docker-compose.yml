@@ -1,0 +1,45 @@
+version: '3.8'
+
+x-environments: &environments
+  SECRET_KEY: ${SECRET_KEY}
+  SENTRY_DSN_URL: ${SENTRY_DSN_URL}
+  ENVIRONMENT: ${ENVIRONMENT}
+
+x-healthcheck-defaults: &healthcheck_defaults
+  interval: 10s
+  retries: 5
+  timeout: 10s
+
+networks:
+  backend:
+    driver: bridge
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: ./deploy/backend/Dockerfile
+    image: ${CI_REGISTRY_IMAGE}/fastapi:${CI_COMMIT_REF_SLUG}
+    networks:
+      - backend
+    env_file:
+      - .env
+    environment:
+      <<: *environments
+    ports:
+      - "0.0.0.0:80:8000"
+    command: ["make", "run_prod"]
+
+  postgres:
+    image: postgres:12
+    networks:
+      - backend
+    environment:
+      POSTGRES_DB: ${POSTGRES_NAME}
+      POSTGRES_USER: ${POSTGRES_USERNAME}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready" ]
+      <<: *healthcheck_defaults
+    ports:
+      - "5432:5432"
